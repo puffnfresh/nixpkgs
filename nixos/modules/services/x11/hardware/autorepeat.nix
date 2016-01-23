@@ -31,11 +31,14 @@ in {
         requires = [ "display-manager.service" ];
         after = [ "display-manager.service" ];
         wantedBy = [ "graphical.target" ];
-        serviceConfig.ExecStart = ''
-          ${pkgs.xlibs.xset}/bin/xset r rate ${toString cfg.delay} ${toString cfg.rate}
-        '';
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = ''
+            ${pkgs.xlibs.xset}/bin/xset r rate ${toString cfg.delay} ${toString cfg.rate}
+          '';
+        };
         environment = { DISPLAY = ":0"; };
-        serviceConfig.Restart = "always";
       };
   };
 }
