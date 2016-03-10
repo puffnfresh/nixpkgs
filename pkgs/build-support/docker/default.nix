@@ -45,27 +45,6 @@ rec {
       done
     '';
   
-  mkTarball = { name ? "docker-tar", drv, onlyDeps ? false }:
-    runCommand "${name}.tar" rec {
-      inherit drv onlyDeps;
-      
-      drvClosure = writeReferencesToFile drv;
-      
-    } ''
-      while read dep; do
-        echo Copying $dep
-        dir="$(dirname "$dep")"
-        mkdir -p "rootfs/$dir"
-        cp -drf --preserve=mode $dep "rootfs/$dir/"
-      done < "$drvClosure"
-
-      if [ -z "$onlyDeps" ]; then
-        cp -drf --preserve=mode $drv/* rootfs/
-      fi
-
-      tar -C rootfs/ -cpf $out .
-    '';
-
   shellScript = text:
     writeScript "script.sh" ''
       #!${stdenv.shell}
@@ -275,14 +254,10 @@ EOF
           os = "linux";
           config = config;
       });
-      
+
       layer = (if runAsRoot == null
                then mkPureLayer { inherit baseJson contents extraCommands; }
                else mkRootLayer { inherit baseJson fromImage fromImageName fromImageTag contents runAsRoot diskSize extraCommands; });
-      depsTarball = mkTarball { name = "${baseName}-deps";
-                                drv = layer;
-                                onlyDeps = true; };
-      
       result = runCommand "${baseName}.tar.gz" {
         buildInputs = [ jshon pigz ];
 
@@ -290,7 +265,9 @@ EOF
         imageTag = tag;
         inherit fromImage baseJson;
 
-        mergedTarball = if tarballs == [] then depsTarball else mergeTarballs ([ depsTarball ] ++ tarballs);
+        layerClosure = writeReferencesToFile layer;
+
+        mergedTarball = mergeTarballs tarballs;
 
         passthru = {
           buildArgs = args;
@@ -320,22 +297,28 @@ EOF
         mkdir temp
         cp ${layer}/* temp/
         chmod ug+w temp/*
-        
-        echo Adding dependencies
+
+        touch layerFiles
+        for dep in $(cat $layerClosure); do
+          find $dep >> layerFiles
+        done
+
+        echo Adding layer
         tar -tf temp/layer.tar >> baseFiles
-        tar -tf "$mergedTarball" | grep -v ${layer} > layerFiles
-        if [ "$(wc -l layerFiles|cut -d ' ' -f 1)" -gt 3 ]; then
-          sed -i -e 's|^[\./]\+||' baseFiles layerFiles
-          comm <(sort -n baseFiles|uniq) <(sort -n layerFiles|uniq) -1 -3 > newFiles
+        comm <(sort -n baseFiles|uniq) <(sort -n layerFiles|uniq|grep -v ${layer}) -1 -3 > newFiles
+        tar -rpf temp/layer.tar --no-recursion --files-from newFiles 2>/dev/null || true
+
+        tar -tf "$mergedTarball" > tarballFiles
+        if [ "$(wc -l tarballFiles|cut -d ' ' -f 1)" -gt 3 ]; then
+          sed -i -e 's|^[\./]\+||' baseFiles tarballFiles
+          comm <(sort -n baseFiles|uniq) <(sort -n tarballFiles|uniq) -1 -3 > newFiles
           mkdir deps
           pushd deps
           tar -xpf "$mergedTarball" --no-recursion --files-from ../newFiles 2>/dev/null || true
           tar -rf ../temp/layer.tar --no-recursion --files-from ../newFiles 2>/dev/null || true
           popd
-        else
-          echo No new deps, no diffing needed
-        fi 
-        
+        fi
+
         echo Adding meta
         
         if [ -n "$parentID" ]; then
