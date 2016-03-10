@@ -1,5 +1,5 @@
 { stdenv, lib, callPackage, runCommand, writeReferencesToFile, writeText, vmTools, writeScript
-, docker, shadow, utillinux, coreutils, jshon, e2fsprogs, goPackages }:
+, docker, shadow, utillinux, coreutils, jshon, e2fsprogs, goPackages, pigz }:
 
 # WARNING: this API is unstable and may be subject to backwards-incompatible changes in the future.
   
@@ -46,7 +46,7 @@ rec {
     '';
   
   mkTarball = { name ? "docker-tar", drv, onlyDeps ? false }:
-    runCommand "${name}.tar.gz" rec {
+    runCommand "${name}.tar" rec {
       inherit drv onlyDeps;
       
       drvClosure = writeReferencesToFile drv;
@@ -62,8 +62,8 @@ rec {
       if [ -z "$onlyDeps" ]; then
         cp -drf --preserve=mode $drv/* rootfs/
       fi
-      
-      tar -C rootfs/ -cpzf $out .
+
+      tar -C rootfs/ -cpf $out .
     '';
 
   shellScript = text:
@@ -106,7 +106,7 @@ EOF
       for tb in $tarballs; do
         tar -C tmp -xkpf $tb
       done
-      tar -C tmp -cpzf $out .
+      tar -C tmp -cpf $out .
     '';
 
   runWithOverlay = { name , fromImage ? null, fromImageName ? null, fromImageTag ? null
@@ -182,7 +182,7 @@ EOF
 
       postMount = ''
         echo Packing raw image
-        tar -C mnt -czf $out .
+        tar -C mnt -cf $out .
       '';
     };
     
@@ -284,7 +284,7 @@ EOF
                                 onlyDeps = true; };
       
       result = runCommand "${baseName}.tar.gz" {
-        buildInputs = [ jshon ];
+        buildInputs = [ jshon pigz ];
 
         imageName = name;
         imageTag = tag;
@@ -357,7 +357,7 @@ EOF
         chmod -R a-w image
 
         echo Cooking the image
-        tar -C image -czf $out .
+        tar -C image -c . | pigz > $out
       '';
 
     in
