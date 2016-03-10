@@ -308,16 +308,17 @@ EOF
         comm <(sort -n baseFiles|uniq) <(sort -n layerFiles|uniq|grep -v ${layer}) -1 -3 > newFiles
         tar -rpf temp/layer.tar --no-recursion --files-from newFiles 2>/dev/null || true
 
+        echo Adding tarballs
         tar -tf "$mergedTarball" > tarballFiles
-        if [ "$(wc -l tarballFiles|cut -d ' ' -f 1)" -gt 3 ]; then
-          sed -i -e 's|^[\./]\+||' baseFiles tarballFiles
-          comm <(sort -n baseFiles|uniq) <(sort -n tarballFiles|uniq) -1 -3 > newFiles
-          mkdir deps
-          pushd deps
-          tar -xpf "$mergedTarball" --no-recursion --files-from ../newFiles 2>/dev/null || true
-          tar -rf ../temp/layer.tar --no-recursion --files-from ../newFiles 2>/dev/null || true
-          popd
-        fi
+
+        # strip prefixes like ./
+        sed -i -e 's|^[\./]\+||' baseFiles tarballFiles
+        # strip trailing / so that empty directories are created
+        sed -i -e 's|/\+$||' baseFiles tarballFiles
+
+        comm <(sort -n baseFiles|uniq) <(sort -n tarballFiles|uniq) -1 -3 > newFiles
+        tar -xpf "$mergedTarball" --no-recursion --files-from newFiles 2>/dev/null || true
+        tar -rpf temp/layer.tar --no-recursion --files-from newFiles 2>/dev/null || true
 
         echo Adding meta
         
