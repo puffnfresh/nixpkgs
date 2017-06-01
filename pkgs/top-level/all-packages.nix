@@ -12223,6 +12223,8 @@ with pkgs;
 
   go-bindata-assetfs = callPackage ../development/tools/go-bindata-assetfs { };
 
+  go-p9p = callPackage ../development/tools/go-p9p { };
+
   gocode = callPackage ../development/tools/gocode { };
 
   kgocode = callPackage ../applications/misc/kgocode { };
