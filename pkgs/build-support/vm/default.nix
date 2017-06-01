@@ -1,5 +1,5 @@
 { pkgs
-, kernel ? pkgs.linux
+, kernel ? (pkgs.forceSystem "x86_64-linux" "x86_64").linux
 , img ? "bzImage"
 , storeDir ? builtins.storeDir
 , rootModules ?
@@ -7,7 +7,8 @@
 }:
 
 with pkgs;
-
+let linuxPkgs = forceSystem "x86_64-linux" "x86_64";
+in
 rec {
 
   qemu = pkgs.qemu_kvm;
@@ -24,7 +25,7 @@ rec {
   qemuProg = "${qemu}/bin/qemu-kvm";
 
 
-  modulesClosure = makeModulesClosure {
+  modulesClosure = linuxPkgs.makeModulesClosure {
     inherit kernel rootModules;
   };
 
@@ -41,12 +42,12 @@ rec {
       mkdir -p $out/lib
 
       # Copy what we need from Glibc.
-      cp -p ${pkgs.stdenv.glibc.out}/lib/ld-linux*.so.? $out/lib
-      cp -p ${pkgs.stdenv.glibc.out}/lib/libc.so.* $out/lib
-      cp -p ${pkgs.stdenv.glibc.out}/lib/libm.so.* $out/lib
+      cp -p ${linuxPkgs.stdenv.glibc.out}/lib/ld-linux*.so.? $out/lib
+      cp -p ${linuxPkgs.stdenv.glibc.out}/lib/libc.so.* $out/lib
+      cp -p ${linuxPkgs.stdenv.glibc.out}/lib/libm.so.* $out/lib
 
       # Copy BusyBox.
-      cp -pd ${pkgs.busybox}/bin/* $out/bin
+      cp -pd ${linuxPkgs.busybox}/bin/* $out/bin
 
       # Run patchelf to make the programs refer to the copied libraries.
       for i in $out/bin/* $out/lib/*; do if ! test -L $i; then nuke-refs $i; fi; done
@@ -166,12 +167,12 @@ rec {
 
 
   stage2Init = writeScript "vm-run-stage2" ''
-    #! ${bash}/bin/sh
+    #! ${linuxPkgs.bash}/bin/sh
     source /tmp/xchg/saved-env
 
     # Set the system time from the hardware clock.  Works around an
     # apparent KVM > 1.5.2 bug.
-    ${pkgs.utillinux}/bin/hwclock -s
+    ${linuxPkgs.utillinux}/bin/hwclock -s
 
     export NIX_STORE=${storeDir}
     export NIX_BUILD_TOP=/tmp
@@ -186,13 +187,13 @@ rec {
     fi
 
     # Set up automatic kernel module loading.
-    export MODULE_DIR=${linux}/lib/modules/
+    export MODULE_DIR=${linuxPkgs.linux}/lib/modules/
     ${coreutils}/bin/cat <<EOF > /run/modprobe
     #! /bin/sh
     export MODULE_DIR=$MODULE_DIR
-    exec ${kmod}/bin/modprobe "\$@"
+    exec ${linuxPkgs.kmod}/bin/modprobe "\$@"
     EOF
-    ${coreutils}/bin/chmod 755 /run/modprobe
+    ${linuxPkgs.coreutils}/bin/chmod 755 /run/modprobe
     echo /run/modprobe > /proc/sys/kernel/modprobe
 
     # For debugging: if this is the second time this image is run,
@@ -200,18 +201,18 @@ rec {
     # an interactive shell.
     if test -n "$origBuilder" -a ! -e /.debug; then
       exec < /dev/null
-      ${coreutils}/bin/touch /.debug
+      ${linuxPkgs.coreutils}/bin/touch /.debug
       $origBuilder $origArgs
       echo $? > /tmp/xchg/in-vm-exit
 
-      ${busybox}/bin/mount -o remount,ro dummy /
+      ${linuxPkgs.busybox}/bin/mount -o remount,ro dummy /
 
-      ${busybox}/bin/poweroff -f
+      ${linuxPkgs.busybox}/bin/poweroff -f
     else
       export PATH=/bin:/usr/bin:${coreutils}/bin
       echo "Starting interactive shell..."
       echo "(To run the original builder: \$origBuilder \$origArgs)"
-      exec ${busybox}/bin/setsid ${bashInteractive}/bin/bash < /dev/ttyS0 &> /dev/ttyS0
+      exec ${linuxPkgs.busybox}/bin/setsid ${linuxPkgs.bashInteractive}/bin/bash < /dev/ttyS0 &> /dev/ttyS0
     fi
   '';
 
