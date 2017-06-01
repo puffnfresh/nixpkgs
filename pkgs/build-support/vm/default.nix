@@ -33,8 +33,8 @@ rec {
   hd = "vda"; # either "sda" or "vda"
 
 
-  initrdUtils = runCommand "initrd-utils"
-    { buildInputs = [ nukeReferences ];
+  initrdUtils = linuxPkgs.runCommand "initrd-utils"
+    { buildInputs = [ linuxPkgs.nukeReferences ];
       allowedReferences = [ "out" modulesClosure ]; # prevent accidents like glibc being included in the initrd
     }
     ''
@@ -70,8 +70,8 @@ rec {
       mknod -m 666 ${dev}/tty     c 5 0
       mknod -m 666 ${dev}/ttyS0   c 4 64
       mknod ${dev}/rtc     c 254 0
-      . /sys/class/block/${hd}/uevent
-      mknod ${dev}/${hd} b $MAJOR $MINOR
+      # . /sys/class/block/${hd}/uevent
+      # mknod ${dev}/${hd} b $MAJOR $MINOR
     '';
 
 
