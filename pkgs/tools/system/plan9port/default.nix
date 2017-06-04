@@ -41,9 +41,7 @@ stdenv.mkDerivation rec {
   builder = ./builder.sh;
 
   NIX_LDFLAGS="-lgcc_s";
-  buildInputs = stdenv.lib.optionals (!stdenv.isDarwin) [
-    which
-    perl
+  buildInputs = [ which perl ] ++ stdenv.lib.optionals (!stdenv.isDarwin) [
     libX11
     fontconfig
     xproto
