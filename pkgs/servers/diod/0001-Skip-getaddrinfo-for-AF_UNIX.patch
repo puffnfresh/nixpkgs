@@ -1,0 +1,27 @@
+From 222e99b9135fb3a82db664c8c86a2886bb47f924 Mon Sep 17 00:00:00 2001
+From: Brian McKenna <bmckenna@atlassian.com>
+Date: Fri, 2 Jun 2017 10:10:09 +1000
+Subject: [PATCH] Skip getaddrinfo for AF_UNIX
+
+Needed for recent versions of getaddrinfo
+---
+ libdiod/diod_sock.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libdiod/diod_sock.c b/libdiod/diod_sock.c
+index e7d9d34..b220c9d 100644
+--- a/libdiod/diod_sock.c
++++ b/libdiod/diod_sock.c
+@@ -342,6 +342,9 @@ diod_sock_accept_one (Npsrv *srv, int fd)
+             err ("accept");
+         return;
+     }
++    if (addr.ss_family == AF_UNIX) {
++      return diod_sock_startfd (srv, fd, fd, ((struct sockaddr_un *)&addr)->sun_path, flags);
++    }
+     if ((res = getnameinfo ((struct sockaddr *)&addr, addr_size,
+                             ip, sizeof(ip), svc, sizeof(svc),
+                             NI_NUMERICHOST | NI_NUMERICSERV))) {
+-- 
+2.10.0
+
