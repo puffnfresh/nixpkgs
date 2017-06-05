@@ -26,7 +26,7 @@
 , storeDir ? builtins.storeDir
 
 , uuid ? "5ac40642-a699-4c14-b8f0-be08f17807c9"
-, authorizedKeys ? builtins.readFile ./default-key.pub
+, authorizedKeys ? ./default-key.pub
 }:
 
 let
