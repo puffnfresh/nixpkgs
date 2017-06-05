@@ -319,6 +319,8 @@ with pkgs;
 
   vmTools = callPackage ../build-support/vm/default.nix { };
 
+  nix-hyperkit-builder = callPackage ../build-support/vm/hyperkit { };
+
   releaseTools = callPackage ../build-support/release/default.nix { };
 
   composableDerivation = callPackage ../../lib/composable-derivation.nix { };
