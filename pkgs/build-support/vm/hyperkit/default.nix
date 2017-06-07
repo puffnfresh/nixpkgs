@@ -14,6 +14,7 @@
 , stdenv
 , perl
 , xz
+, diod
 , pathsFromGraph
 , hyperkit
 , writeScript
@@ -44,16 +45,6 @@ let
       mknod ${dev}/rtc     c 254 0
       ln -s /proc/self/fd /dev/fd
     '';
-  systemTarball = import <nixpkgs/nixos/lib/make-system-tarball.nix> {
-    inherit stdenv perl xz pathsFromGraph;
-    contents = [];
-    storeContents = [
-      {
-        object = stage2Init;
-        symlink = "none";
-      }
-    ];
-  };
   stage1Init = writeScript "vm-run-stage1" ''
     #! ${vmToolsLinux.initrdUtils}/bin/ash -e
 
@@ -88,13 +79,18 @@ let
     mount -t tmpfs -o "mode=1777" none /fs/dev/shm
     mount -t devpts none /fs/dev/pts
 
-    echo "extracting Nix store..."
-    tar -C /fs -xf ${systemTarball}/tarball/nixos-system-${system}.tar.xz nix
+    echo "mounting Nix store..."
+    mkdir -p /fs${storeDir}
+    mount -t 9p store /fs${storeDir} -o trans=virtio,version=9p2000.L,cache=loose,aname=${storeDir}
 
     mkdir -p /fs/tmp /fs/run /fs/var
     mount -t tmpfs -o "mode=1777" none /fs/tmp
     mount -t tmpfs -o "mode=755" none /fs/run
     ln -sfn /run /fs/var/run
+
+    echo "mounting host's temporary directory..."
+    mkdir -p /fs/tmp/xchg
+    mount -t 9p xchg /fs/tmp/xchg -o trans=virtio,version=9p2000.L,cache=loose,aname="$xchg"
 
     mkdir -p /fs/proc
     mount -t proc none /fs/proc
@@ -110,11 +106,6 @@ let
     exec switch_root /fs $command
   '';
 
-  sshdConfig = writeText "hyperkit-sshd-config" ''
-    PermitRootLogin yes
-    PasswordAuthentication no
-    ChallengeResponseAuthentication no
-  '';
   stage2Init = writeScript "vm-run-stage2" ''
     #! ${pkgsLinux.bash}/bin/bash
 
@@ -126,32 +117,15 @@ let
     ${pkgsLinux.coreutils}/bin/mkdir -p /bin
     ${pkgsLinux.coreutils}/bin/ln -s ${pkgsLinux.bash}/bin/sh /bin/sh
 
-    # # Set up automatic kernel module loading.
-    export MODULE_DIR=${pkgsLinux.linux}/lib/modules/
-    ${pkgsLinux.coreutils}/bin/cat <<EOF > /run/modprobe
-    #! /bin/sh
-    export MODULE_DIR=$MODULE_DIR
-    exec ${pkgsLinux.kmod}/bin/modprobe "\$@"
-    EOF
-    ${pkgsLinux.coreutils}/bin/chmod 755 /run/modprobe
-    echo /run/modprobe > /proc/sys/kernel/modprobe
-    ${pkgsLinux.kmod}/bin/modprobe virtio_net
-
     echo "root:x:0:0:System administrator:/root:${pkgsLinux.bash}/bin/bash" >> /etc/passwd
-    echo "sshd:x:1:65534:SSH privilege separation user:/var/empty:${pkgsLinux.shadow}/bin/nologin" >> /etc/passwd
-    echo "nixbld1:x:30001:30000:Nix build user 1:/var/empty:${pkgsLinux.shadow}/bin/nologin" >> /etc/passwd
-    echo "nixbld:x:30000:nixbld1" >> /etc/group
 
-    export PATH="${vmToolsLinux.initrdUtils}/bin:${pkgsLinux.nix}/bin"
-    ln -s /dev/pts/ptmx /dev/ptmx
-    mkdir -p /etc/ssh /var/empty /root/.ssh
-    ${pkgsLinux.dhcp}/bin/dhclient -v eth0
-    ${pkgsLinux.openssh}/bin/ssh-keygen -A
-    echo "export PATH=$PATH" >> /root/.bashrc
-    cp ${authorizedKeys} /root/.ssh/authorized_keys
-    chmod 0644 /root/.ssh/authorized_keys
-    ifconfig -a
-    exec ${pkgsLinux.openssh}/bin/sshd -D -e -f ${sshdConfig}
+    set -x
+
+    echo "loading host's Nix DB..."
+    ${pkgsLinux.nix}/bin/nix-store --load-db < /tmp/xchg/nix-db
+
+    echo "realising derivation..."
+    ${pkgsLinux.nix}/bin/nix-store --option use-binary-caches false --option build-users-group "" --realise "$drv"
   '';
 
   img = "bzImage";
@@ -162,18 +136,39 @@ let
       }
     ];
   };
-  startHyperkitBuilder = ''
+  buildHook = ''
     #!/bin/sh
-    exec ${hyperkit}/bin/hyperkit \
-      -A \
-      -s 0,hostbridge \
-      -s 1,lpc \
-      -s 2,virtio-rnd \
-      -s 3,virtio-net \
-      -l com1,stdio \
-      -U ${uuid} \
-      -f kexec,${pkgsLinux.linux}/${img},${initrd}/initrd,"console=ttyS0 panic=1 command=${stage2Init} loglevel=4" \
-      $@
+    set -x
+    # echo $@
+    TMPDIR=$(mktemp -d)
+    ${diod}/bin/diod -e ${storeDir} -n -l "$TMPDIR/nix-store-9p" -S -f &
+    ${diod}/bin/diod -e "$TMPDIR" -n -l "$TMPDIR/xchg-9p" -S -f &
+    nix-store --dump-db > "$TMPDIR/nix-db"
+    while read amWilling neededSystem drvPath requiredFeatures; do
+      echo "# accept" >&2
+      read inputs
+      read outputs
+      # echo "$amWilling"
+      # echo "$neededSystem"
+      # echo "$drvPath"
+      # echo "$requiredFeatures"
+      # echo "$inputs"
+      # echo "$outputs"
+      exec ${hyperkit}/bin/hyperkit \
+        -A \
+        -s 0,hostbridge \
+        -s 1,lpc \
+        -s 2,virtio-rnd \
+        -s 3,virtio-9p,path=$TMPDIR/nix-store-9p,tag=store \
+        -s 4,virtio-9p,path=$TMPDIR/xchg-9p,tag=xchg \
+        -l com1,stdio \
+        -U ${uuid} \
+        -f kexec,${pkgsLinux.linux}/${img},${initrd}/initrd,"console=ttyS0 panic=1 command=${stage2Init} drv=$drvPath xchg=$TMPDIR loglevel=4" \
+        $HYPERKIT_ARGS
+    done
+    kill %1
+    kill %2
+    rm -r "$TMPDIR"
   '';
 in
-writeScriptBin "nix-hyperkit-builder" startHyperkitBuilder
+writeScript "nix-hyperkit-build-hook" buildHook
