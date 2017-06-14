@@ -14,6 +14,8 @@
 , stdenv
 , perl
 , xz
+, bash
+, nix
 , pathsFromGraph
 , hyperkit
 , writeScript
@@ -27,23 +29,14 @@
 
 , uuid ? "5ac40642-a699-4c14-b8f0-be08f17807c9"
 , authorizedKeys ? ./default-key.pub
+, privateKey ? ./default-key
 }:
 
 let
   pkgsLinux = forceSystem "x86_64-linux" "x86_64";
   vmToolsLinux = vmTools.override { pkgs = pkgsLinux; };
 
-  createDeviceNodes = dev:
-    ''
-      mknod -m 666 ${dev}/null    c 1 3
-      mknod -m 666 ${dev}/zero    c 1 5
-      mknod -m 666 ${dev}/random  c 1 8
-      mknod -m 666 ${dev}/urandom c 1 9
-      mknod -m 666 ${dev}/tty     c 5 0
-      mknod -m 666 ${dev}/ttyS0   c 4 64
-      mknod ${dev}/rtc     c 254 0
-      ln -s /proc/self/fd /dev/fd
-    '';
+  hd = "vda";
   systemTarball = import <nixpkgs/nixos/lib/make-system-tarball.nix> {
     inherit stdenv perl xz pathsFromGraph;
     contents = [];
@@ -54,6 +47,18 @@ let
       }
     ];
   };
+  createDeviceNodes = dev:
+    ''
+      mknod -m 666 ${dev}/null    c 1 3
+      mknod -m 666 ${dev}/zero    c 1 5
+      mknod -m 666 ${dev}/random  c 1 8
+      mknod -m 666 ${dev}/urandom c 1 9
+      mknod -m 666 ${dev}/tty     c 5 0
+      mknod -m 666 ${dev}/ttyS0   c 4 64
+      mknod -m 666 ${dev}/ttyS1   c 4 65
+      mknod ${dev}/rtc     c 254 0
+      . /sys/class/block/${hd}/uevent && mknod ${dev}/${hd} b $MAJOR $MINOR || true
+    '';
   stage1Init = writeScript "vm-run-stage1" ''
     #! ${vmToolsLinux.initrdUtils}/bin/ash -e
 
@@ -74,12 +79,16 @@ let
 
     mount -t tmpfs none /dev
     ${createDeviceNodes "/dev"}
+    ln -s /proc/self/fd /dev/fd
 
     ifconfig lo up
 
     mkdir /fs
 
-    mount -t tmpfs none /fs
+    mount /dev/${hd} /fs 2>/dev/null || {
+      ${pkgsLinux.e2fsprogs}/bin/mkfs.ext4 -q /dev/${hd}
+      mount /dev/${hd} /fs
+    } || true
 
     mkdir -p /fs/dev
     mount -o bind /dev /fs/dev
@@ -124,7 +133,7 @@ let
     cd "$NIX_BUILD_TOP"
 
     ${pkgsLinux.coreutils}/bin/mkdir -p /bin
-    ${pkgsLinux.coreutils}/bin/ln -s ${pkgsLinux.bash}/bin/sh /bin/sh
+    ${pkgsLinux.coreutils}/bin/ln -fs ${pkgsLinux.bash}/bin/sh /bin/sh
 
     # # Set up automatic kernel module loading.
     export MODULE_DIR=${pkgsLinux.linux}/lib/modules/
@@ -144,13 +153,13 @@ let
 
     export PATH="${vmToolsLinux.initrdUtils}/bin:${pkgsLinux.nix}/bin"
     ln -s /dev/pts/ptmx /dev/ptmx
-    mkdir -p /etc/ssh /var/empty /root/.ssh
+    mkdir -p /etc/ssh /root/.ssh /var/db /var/empty
     ${pkgsLinux.dhcp}/bin/dhclient -v eth0
+    ifconfig eth0 | ${pkgsLinux.perl}/bin/perl -n -e '/inet addr:([^ ]*)/ && print $1' > /dev/ttyS1
     ${pkgsLinux.openssh}/bin/ssh-keygen -A
     echo "export PATH=$PATH" >> /root/.bashrc
     cp ${authorizedKeys} /root/.ssh/authorized_keys
     chmod 0644 /root/.ssh/authorized_keys
-    ifconfig -a
     exec ${pkgsLinux.openssh}/bin/sshd -D -e -f ${sshdConfig}
   '';
 
@@ -163,17 +172,42 @@ let
     ];
   };
   startHyperkitBuilder = ''
-    #!/bin/sh
-    exec ${hyperkit}/bin/hyperkit \
+    #!${bash}/bin/bash
+
+    TMPDIR="/tmp"
+    TMPDIR="$(mktemp -d)"
+
+    ${hyperkit}/bin/hyperkit \
       -A \
       -s 0,hostbridge \
       -s 1,lpc \
       -s 2,virtio-rnd \
       -s 3,virtio-net \
       -l com1,stdio \
+      -l com2,autopty,log=$TMPDIR/nix-hyperkit-ip \
       -U ${uuid} \
       -f kexec,${pkgsLinux.linux}/${img},${initrd}/initrd,"console=ttyS0 panic=1 command=${stage2Init} loglevel=4" \
-      $@
+      $@ &>"$TMPDIR/hyperkit.log" &
+
+    echo -n "Waiting for Hyperkit to send the VM's IP" >&2
+    # Wait until the file looks like an IP
+    until ip="$(grep -aoE "[0-9.]+" "$TMPDIR/nix-hyperkit-ip" 2>/dev/null)"; do
+      echo -n '.' >&2
+      sleep 1
+    done
+    echo >&2
+
+    cp ${privateKey} "$TMPDIR/private-key"
+    chmod 0600 "$TMPDIR/private-key"
+    echo "root@$ip x86_64-linux $TMPDIR/private-key 1" > "$TMPDIR/remote-systems"
+
+    echo "Hyperkit is now running. Source the following script:" >&2
+
+    echo "sudo chown -R \"\$USER\" \"$TMPDIR\""
+    echo "nix-hyperkit-builder-stop() { ssh -i \"$TMPDIR/private-key\" root@$ip poweroff -f & rm -r \"$TMPDIR\" & }"
+    echo "export NIX_BUILD_HOOK='${nix}/libexec/nix/build-remote.pl'"
+    echo "export NIX_REMOTE_SYSTEMS='$TMPDIR/remote-systems'"
+    echo "export NIX_CURRENT_LOAD='$TMPDIR/current-load'"
   '';
 in
 writeScriptBin "nix-hyperkit-builder" startHyperkitBuilder
