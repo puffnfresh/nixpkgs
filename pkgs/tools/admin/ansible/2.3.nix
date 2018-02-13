@@ -1,10 +1,20 @@
 { stdenv
+, buildPythonPackage
 , fetchurl
-, pythonPackages
+, pycrypto
+, paramiko
+, jinja2
+, pyyaml
+, httplib2
+, boto
+, six
+, netaddr
+, dns
+, pywinrm
 , windowsSupport ? false
 }:
 
-pythonPackages.buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "ansible";
   version = "2.3.1.0";
   name = "${pname}-${version}";
@@ -23,7 +33,7 @@ pythonPackages.buildPythonPackage rec {
   dontPatchELF = true;
   dontPatchShebangs = false;
 
-  propagatedBuildInputs = with pythonPackages; [
+  propagatedBuildInputs = [
     pycrypto paramiko jinja2 pyyaml httplib2 boto six netaddr dns
   ] ++ stdenv.lib.optional windowsSupport pywinrm;
 

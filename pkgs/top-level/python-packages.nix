@@ -432,6 +432,8 @@ in {
     };
   };
 
+  ansible = callPackage ../tools/admin/ansible/2.3.nix {};
+
   amqp_1 = buildPythonPackage rec {
     name = "amqp-${version}";
     version = "1.4.9";
@@ -511,6 +513,31 @@ in {
   };
 
   apsw = callPackage ../development/python-modules/apsw {};
+
+  ara = buildPythonPackage rec {
+    name = "ara-${version}";
+    version = "0.14.5";
+
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/a/ara/${name}.tar.gz";
+      sha256 = "1x7rah59har4ry9xx9yhk99m2jqlhb5dwc7ipydirpz0w4x6yby0";
+    };
+
+    propagatedBuildInputs = with self; [
+      ansible cliff decorator flask_migrate frozen-flask junit-xml
+      oslo-serialization oslo-utils pyfakefs pygments subunit xstatic
+      xstatic-bootstrap-scss xstatic-datatables xstatic-jquery
+      xstatic-patternfly xstatic-patternfly-bootstrap-treeview
+    ];
+
+    doCheck = false;
+
+    meta = {
+      description = "Ansible Run Analysis";
+      homepage = http://ara.readthedocs.io/;
+      license = licenses.gpl3;
+    };
+  };
 
   astor = callPackage ../development/python-modules/astor {};
 
@@ -5333,6 +5360,24 @@ in {
 
   faker = callPackage ../development/python-modules/faker { };
 
+  pyfakefs = buildPythonPackage rec {
+    name = "pyfakefs-${version}";
+    version = "3.3";
+
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/p/pyfakefs/${name}.tar.gz";
+      sha256 = "19hj5wyi8wy8n8hdj5dwlryl3frrn783y4dsfdxn5mg0lpg9iqg3";
+    };
+
+    doCheck = false;
+
+    meta = {
+      description = "a fake file system that mocks the Python file system modules";
+      homepage = http://pyfakefs.org/;
+      license = licenses.asl20;
+    };
+  };
+
   fake_factory = buildPythonPackage rec {
     name = "fake-factory-${version}";
     version = "0.6.0";
@@ -5454,6 +5499,27 @@ in {
       homepage = "https://github.com/obsrvbl/flowlogs-reader";
       maintainers = with maintainers; [ cransom ];
       license = licenses.asl20;
+    };
+  };
+
+  frozen-flask = buildPythonPackage rec {
+    name = "Frozen-Flask-0.15";
+
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/F/Frozen-Flask/${name}.tar.gz";
+      sha256 = "0sb2lmcvvzrwysapd3braa9vk1pvcmg42gjjr5zzmlxrv1p8v1c3";
+    };
+
+    propagatedBuildInputs = with self; [
+      flask
+    ];
+
+    doCheck = false;
+
+    meta = {
+      homepage = https://github.com/Frozen-Flask/Frozen-Flask;
+      description = "Freezes a Flask application into a set of static files.";
+      license = stdenv.lib.licenses.bsd;
     };
   };
 
@@ -6456,6 +6522,28 @@ in {
     meta = {
       description = "A Python client library for the Lightning data visualization server";
       homepage = http://lightning-viz.org;
+      license = licenses.mit;
+    };
+  };
+
+  junit-xml = buildPythonPackage rec {
+    version = "1.8";
+    name = "junit-xml-${version}";
+
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/j/junit-xml/${name}.tar.gz";
+      sha256 = "08fw86azza6d3l3nx34kq69cpwmmfqpn7xrb8pdlxmhr1941qbv0";
+    };
+
+    propagatedBuildInputs = with self; [
+      six
+    ];
+
+    doCheck = false;
+
+    meta = {
+      description = "Creates JUnit XML test result documents that can be read by tools such as Jenkins";
+      homepage = https://github.com/kyrus/python-junit-xml;
       license = licenses.mit;
     };
   };
@@ -14066,24 +14154,24 @@ in {
 
   cliff = buildPythonPackage rec {
     name = "cliff-${version}";
-    version = "1.15.0";
+    version = "2.11.0";
 
     src = pkgs.fetchurl {
       url = "mirror://pypi/c/cliff/${name}.tar.gz";
-      sha256 = "1rrbq1nvc84x417hbfm9sc1scia16nilr8nm8ycm8iq5jkh6zfpm";
+      sha256 = "119ah1jjdfg5i929xk1h5cp247r4m3rlnp9nmqfbdv9757xii8rq";
     };
 
     propagatedBuildInputs = with self; [
-      argparse pyyaml pbr six cmd2 stevedore unicodecsv prettytable pyparsing
+      pyyaml pbr six cmd2 stevedore unicodecsv prettytable pyparsing
     ];
     buildInputs = with self; [
       httplib2 oslosphinx coverage mock nose tempest-lib
     ];
 
+    doCheck = false;
+
     meta = with stdenv.lib; {
       homepage = "https://launchpad.net/python-cliff";
-      # requires an update, incompatible with current dependencies (pbr)
-      broken = true;
     };
   };
 
@@ -25847,6 +25935,38 @@ EOF
     };
   };
 
+  xstatic-bootstrap-scss = buildPythonPackage rec {
+    name = "XStatic-Bootstrap-SCSS-${version}";
+    version = "3.3.7.1";
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/X/XStatic-Bootstrap-SCSS/XStatic-Bootstrap-SCSS-${version}.tar.gz";
+      sha256 = "1kas1qs7c9prff2bxc7q79s1yvnhg46bdq226azn6c996zq8sf2d";
+    };
+
+    meta = {
+      homepage =  http://getbootstrap.com;
+      description = "bootstrap-scss packaged static files for python";
+      license = licenses.asl20;
+      maintainers = [ maintainers.puffnfresh ];
+    };
+  };
+
+  xstatic-datatables = buildPythonPackage rec {
+    name = "XStatic-DataTables-${version}";
+    version = "1.10.15.1";
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/X/XStatic-DataTables/XStatic-DataTables-${version}.tar.gz";
+      sha256 = "1wvm2d1zywqwhxi9cxk590wslhrfnc1pyylziisrxmiv0krpf2hl";
+    };
+
+    meta = {
+      homepage =  https://www.datatables.net/;
+      description = "datatables packaged static files for python";
+      license = licenses.mit;
+      maintainers = [ maintainers.puffnfresh ];
+    };
+  };
+
   xstatic-jquery = buildPythonPackage rec {
     name = "XStatic-jQuery-${version}";
     version = "1.10.2.1";
@@ -25894,6 +26014,38 @@ EOF
       description = "jquery-ui packaged static files for python";
       license = licenses.mit;
       maintainers = [ maintainers.makefu ];
+    };
+  };
+
+  xstatic-patternfly = buildPythonPackage rec {
+    name = "XStatic-Patternfly-${version}";
+    version = "3.21.0.1";
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/X/XStatic-Patternfly/XStatic-Patternfly-${version}.tar.gz";
+      sha256 = "025c0yic0wj1ssj05p8hny22zf8ghi0v1wbwin7xzd26jyfh2jnw";
+    };
+
+    meta = {
+      homepage = https://www.patternfly.org/;
+      description = "patternfly packaged static files for python";
+      license = licenses.asl20;
+      maintainers = [ maintainers.puffnfresh ];
+    };
+  };
+
+  xstatic-patternfly-bootstrap-treeview = buildPythonPackage rec {
+    name = "XStatic-Patternfly-Bootstrap-Treeview-${version}";
+    version = "2.1.3.2";
+    src = pkgs.fetchurl {
+      url = "mirror://pypi/X/XStatic-Patternfly-Bootstrap-Treeview/XStatic-Patternfly-Bootstrap-Treeview-${version}.tar.gz";
+      sha256 = "19ki7a8li6y7554sqbsyz8gkln2fg85vvb6kii1xg9idcgy917z5";
+    };
+
+    meta = {
+      homepage = https://www.patternfly.org/;
+      description = "patternfly packaged static files for python";
+      license = licenses.asl20;
+      maintainers = [ maintainers.puffnfresh ];
     };
   };
 

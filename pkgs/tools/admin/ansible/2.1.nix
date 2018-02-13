@@ -1,10 +1,18 @@
 { stdenv
+, buildPythonPackage
 , fetchurl
-, pythonPackages
+, pycrypto
+, paramiko
+, jinja2
+, pyyaml
+, httplib2
+, boto
+, six
+, netaddr
+, dns
+, pywinrm
 , windowsSupport ? false
 }:
-
-with pythonPackages;
 
 let
   jinja = jinja2.overridePythonAttrs (old: rec {

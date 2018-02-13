@@ -1,13 +1,21 @@
 { stdenv
+, buildPythonPackage
 , fetchurl
-, pythonPackages
+, pycrypto
+, paramiko
+, jinja2
+, pyyaml
+, httplib2
+, boto
+, six
+, netaddr
+, dns
+, pywinrm
 , windowsSupport ? false
 }:
 
-with pythonPackages;
-
 let
-  # Shouldn't be needed anymore in next version
+  # Not needed in Ansible 2.3
   # https://github.com/NixOS/nixpkgs/pull/22345#commitcomment-20718521
   jinja = jinja2.overridePythonAttrs (old: rec {
     version = "2.8.1";

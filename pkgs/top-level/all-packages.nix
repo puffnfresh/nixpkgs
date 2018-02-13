@@ -6807,9 +6807,9 @@ with pkgs;
 
   augeas = callPackage ../tools/system/augeas { };
 
-  ansible_2_1 = callPackage ../tools/admin/ansible/2.1.nix {};
-  ansible_2_2 = callPackage ../tools/admin/ansible/2.2.nix {};
-  ansible_2_3 = callPackage ../tools/admin/ansible/2.3.nix {};
+  ansible_2_1 = pythonPackages.callPackage ../tools/admin/ansible/2.1.nix {};
+  ansible_2_2 = pythonPackages.callPackage ../tools/admin/ansible/2.2.nix {};
+  ansible_2_3 = pythonPackages.callPackage ../tools/admin/ansible/2.3.nix {};
   ansible  = ansible_2_3;
   ansible2 = ansible_2_3;
 
