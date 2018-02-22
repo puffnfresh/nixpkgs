@@ -1,25 +1,21 @@
 { stdenv, lib, fetchurl }:
 
 let
-  rev = "db7b7b0f8147f29360d69dc81af9e2877647f0de";
+  rev = "75434cdd2c2c7c3be257f07f3b7c1a91eca27225";
 in
 stdenv.mkDerivation rec {
   name = "vpnkit-${version}";
   version = lib.strings.substring 0 7 rev;
 
   src = fetchurl {
-    url = https://931-58395340-gh.circle-artifacts.com/0/Users/distiller/vpnkit/vpnkit.tgz;
-    sha256 = "0rwrxi3c9yri0n3m8iznpqy5wql7b9j6khzfsdxvflr44s7jr0x3";
+    url = https://1013-58395340-gh.circle-artifacts.com/0/Users/distiller/vpnkit/vpnkit.tgz;
+    sha256 = "1jcgx1cg70kdlxc7xrggk1fkb96aqn1h5sklqavpnxn08myla8bj";
   };
 
   sourceRoot = ".";
 
   installPhase = ''
-    APP=$out/Applications/VPNKit/
-    mkdir -p $APP
-    mkdir -p $out/bin
-    cp -r Contents $APP
-    ln -s $APP/Contents/MacOS/vpnkit $out/bin/vpnkit
+    cp -r Contents/Resources $out
   '';
 
   meta = {
