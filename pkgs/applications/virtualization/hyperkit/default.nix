@@ -1,11 +1,12 @@
 { stdenv, lib, fetchFromGitHub, Hypervisor, vmnet, xpc, libobjc }:
 
 let
-  rev = "3e31617ae866c93925e2b3bc5d8006b60985e920";
+  rev = "858492e3d919f8b49a39e1944a49e1d7b4a51e6d";
 in
 stdenv.mkDerivation rec {
   name    = "hyperkit-${version}";
-  version = lib.strings.substring 0 7 rev;
+  # HyperKit release binary uses 6 characters in the version
+  version = lib.strings.substring 0 6 rev;
 
   src = fetchFromGitHub {
     owner = "moby";
