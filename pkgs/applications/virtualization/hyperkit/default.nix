@@ -1,7 +1,7 @@
 { stdenv, lib, fetchFromGitHub, Hypervisor, vmnet, xpc, libobjc }:
 
 let
-  rev = "858492e3d919f8b49a39e1944a49e1d7b4a51e6d";
+  rev = "6f6edf716b893544c9e0ef3032459180560f0333";
 in
 stdenv.mkDerivation rec {
   name    = "hyperkit-${version}";
@@ -12,7 +12,7 @@ stdenv.mkDerivation rec {
     owner = "moby";
     repo = "hyperkit";
     inherit rev;
-    sha256 = "1ndl6dj2qbwns2dcp43xhp5k9zcjmxl5y0rz46d8b3zwm7ixf2xr";
+    sha256 = "1vpha4dmal3alw76xfvwj7k0qf5gsb5rz821z5j5a3silqjhihcy";
   };
 
   buildInputs = [ Hypervisor vmnet xpc libobjc ];
@@ -33,9 +33,9 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    description = "Lightweight Virtualization on OS X Based on bhyve";
-    homepage = "https://github.com/mist64/xhyve";
-    maintainers = [ lib.maintainers.lnl7 ];
+    description = "A toolkit for embedding hypervisor capabilities in your application";
+    homepage = "https://github.com/moby/hyperkit";
+    maintainers = [ lib.maintainers.puffnfresh ];
     platforms = lib.platforms.darwin;
   };
 }
