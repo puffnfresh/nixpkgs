@@ -218,8 +218,25 @@ stage2Init = let
             echo -e '\033[0m'
           }
 
-          inst
-          while true; do sleep 100000; done
+          (while read x; do
+            case "$x" in
+              stop)
+                ${script_poweroff}
+                ;;
+              ping)
+                echo "pong"
+                ;;
+              ps)
+                ${pkgsLinux.busybox}/bin/ps auxfg
+                ;;
+              df)
+                ${pkgsLinux.coreutils}/bin/df -ha
+                ;;
+              *)
+                echo "I know stop, ping, ps, df"
+                ;;
+            esac
+          done) < /dev/console > /dev/console
         '')
       ];
     };
