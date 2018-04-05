@@ -137,11 +137,6 @@ stage2Init = let
 
     script_poweroff = writeText "poweroff" ''
       #!/bin/sh
-      exec ${pkgsLinux.busybox}/bin/poweroff
-    '';
-
-    script_poweroff_f = writeText "poweroff" ''
-      #!/bin/sh
       exec ${pkgsLinux.busybox}/bin/poweroff -f
     '';
 
@@ -260,9 +255,6 @@ stage2Init = let
       rm /nix-path-registration
     fi
 
-    ln -s /proc/self/fd/0 /dev/pid-1-stdin
-    ln -s /proc/self/fd/1 /dev/pid-1-stdout
-
     ifconfig eth0 ${containerIp}
     route add default gw 192.168.65.1 eth0
     echo 'nameserver 192.168.65.1' > /etc/resolv.conf
@@ -301,10 +293,7 @@ stage2Init = let
     cat ${script_poweroff} > /etc/acpi/PWRF/00000080
     chmod +x /etc/acpi/PWRF/00000080
 
-    mkdir -p /dev/input /etc/acpi/PWRF /var/log
-
-    cat ${script_poweroff_f} > /etc/acpi/PWRF/00000080
-    chmod +x /etc/acpi/PWRF/00000080
+    mkdir -p /dev/input /var/log
 
     rm -rf /etc/runit
     cp -r ${runit_targets} /etc/runit/
