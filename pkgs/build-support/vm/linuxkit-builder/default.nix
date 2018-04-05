@@ -197,6 +197,13 @@ stage2Init = let
 
         (writeRunitForegroundService "vpnkit-forwarder" ''
           #!/bin/sh
+          ${pkgsLinux.go-vpnkit}/bin/vpnkit-expose-port \
+            -i \
+            -host-ip 127.0.0.1 -host-port ${hostPort} \
+            -container-ip 192.168.65.2 -container-port 22 \
+            -no-local-ip
+          echo "VPNKit expose port exited $?, which may be fine"
+
           exec ${pkgsLinux.go-vpnkit}/bin/vpnkit-forwarder
         '')
 
