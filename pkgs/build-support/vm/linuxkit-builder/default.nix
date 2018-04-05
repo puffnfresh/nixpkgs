@@ -25,7 +25,7 @@
 , vmTools
 , makeInitrd
 
-, linuxkitKernel ? import ./kernel.nix { pkgs = forceSystem "x86_64-linux" "x86_64"; }
+, linuxkitKernel ? (forceSystem "x86_64-linux" "x86_64").callPackage ./kernel.nix { }
 , storeDir ? builtins.storeDir
 
 , hostPort ? "24083"
@@ -39,7 +39,7 @@ let
   vmToolsLinux = vmTools.override { kernel = linuxkitKernel; pkgs = pkgsLinux; };
   containerIp = "192.168.65.2";
 
-  hd = "vda";
+  hd = "sda";
   systemTarball = import ../../../../nixos/lib/make-system-tarball.nix {
     inherit stdenv perl xz pathsFromGraph;
     contents = [];
@@ -68,17 +68,15 @@ let
       insmod $i
     done
 
-    mount -t tmpfs none /dev
-    ${vmToolsLinux.createDeviceNodes "/dev"}
-    ln -s /proc/self/fd /dev/fd
+    mount -t devtmpfs devtmpfs /dev
 
     ifconfig lo up
 
     mkdir /fs
 
-    if ! mount /dev/${hd} /fs 2>/dev/null; then
+    if ! mount -t ext4 /dev/${hd} /fs 2>/dev/null; then
       ${pkgsLinux.e2fsprogs}/bin/mkfs.ext4 -q /dev/${hd}
-      mount /dev/${hd} /fs
+      mount -t ext4 /dev/${hd} /fs
     fi
 
     mkdir -p /fs/dev
@@ -89,7 +87,7 @@ let
     mount -t devpts none /fs/dev/pts
 
     echo "extracting Nix store..."
-    tar -C /fs -xf ${systemTarball}/tarball/nixos-system-${system}.tar.xz nix nix-path-registration
+    EXTRACT_UNSAFE_SYMLINKS=1 tar -C /fs -xf ${systemTarball}/tarball/nixos-system-${system}.tar.xz nix nix-path-registration
 
     mkdir -p /fs/tmp /fs/run /fs/var
     mount -t tmpfs -o "mode=755" none /fs/run
@@ -219,7 +217,7 @@ stage2Init = let
           }
 
           inst
-          while read x; do inst; done
+          while true; do sleep 100000; done
         '')
       ];
     };
@@ -233,6 +231,7 @@ stage2Init = let
 
     ${pkgsLinux.coreutils}/bin/mkdir -p /bin
     ${pkgsLinux.coreutils}/bin/ln -fs ${pkgsLinux.bash}/bin/sh /bin/sh
+    ln -s /proc/self/fd /dev/fd
 
     # # Set up automatic kernel module loading.
     ${pkgsLinux.coreutils}/bin/cat ${script_modprobe} > /run/modprobe
@@ -253,20 +252,22 @@ stage2Init = let
     cat ${file_bashrc} > /root/.bashrc
     . /root/.bashrc
 
+    ls -la /nix/var/nix/ || true
+    ls -la /nix/var/nix/db || true
+
     if [ -f /nix-path-registration ]; then
       cat /nix-path-registration | nix-store --load-db
       rm /nix-path-registration
     fi
 
-    ln -s /dev/pts/ptmx /dev/ptmx
-    ln -s /proc/self/fd/0 /dev/stdin
+    ln -s /proc/self/fd/0 /dev/pid-1-stdin
+    ln -s /proc/self/fd/1 /dev/pid-1-stdout
 
     ifconfig eth0 ${containerIp}
     route add default gw 192.168.65.1 eth0
     echo 'nameserver 192.168.65.1' > /etc/resolv.conf
 
     mkdir -p /mnt
-    mknod /dev/sr0 b 11 0
     ${pkgsLinux.busybox}/bin/mount /dev/sr0 /mnt
 
     if [ ! -f /mnt/config ]; then
@@ -301,7 +302,7 @@ stage2Init = let
     chmod +x /etc/acpi/PWRF/00000080
 
     mkdir -p /dev/input /etc/acpi/PWRF /var/log
-    mknod /dev/input/event0 c 13 64
+
     cat ${script_poweroff_f} > /etc/acpi/PWRF/00000080
     chmod +x /etc/acpi/PWRF/00000080
 
@@ -366,7 +367,20 @@ stage2Init = let
       )
     fi
 
+    cp ${./integrated.sh} $DIR/integrated.sh
+    chmod +x $DIR/integrated.sh
     cp ${./example.nix} $DIR/example.nix
+
+    cat <<EOF > $DIR/ssh-config
+    Host nix-linuxkit
+       HostName localhost
+       User root
+       Port ${hostPort}
+       IdentityFile $DIR/keys/client
+       StrictHostKeyChecking yes
+       UserKnownHostsFile $DIR/keys/known_host
+       IdentitiesOnly yes
+    EOF
 
 
     cat <<-EOF > $DIR/finish-setup.sh
@@ -381,7 +395,7 @@ stage2Init = let
         Host nix-linuxkit
            HostName localhost
            User root
-           Port 24083
+           Port ${hostPort}
            IdentityFile $DIR/keys/client
            StrictHostKeyChecking yes
            UserKnownHostsFile $DIR/keys/known_host
@@ -403,7 +417,7 @@ stage2Init = let
       -networking vpnkit \
       -ip ${containerIp} \
       -disk $DIR/nix-disk,size=$SIZE \
-      -data $DIR/keys/server-config.tar \
+      -data-file $DIR/keys/server-config.tar \
       -cpus $CPUS \
       -mem $MEM \
       $DIR/nix
