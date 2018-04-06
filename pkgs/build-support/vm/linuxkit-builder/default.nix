@@ -21,10 +21,11 @@
 , writeScriptBin
 , writeText
 , writeTextFile
+, runCommand
 , forceSystem
 , vmTools
 , makeInitrd
-
+, shellcheck
 , linuxkitKernel ? (forceSystem "x86_64-linux" "x86_64").callPackage ./kernel.nix { }
 , storeDir ? builtins.storeDir
 
@@ -34,6 +35,20 @@
 let
   writeScriptDir = name: text: writeTextFile {inherit name text; executable = true; destination = "/${name}"; };
   writeRunitForegroundService = name: run: writeTextFile {inherit name; text = run; executable = true; destination = "/${name}/run"; };
+  shellcheckedScript = name: src: substitutions: runCommand "shellchecked-${name}" (substitutions // {
+    buildInputs = [ shellcheck ];
+  }) ''
+    cp ${src} './${name}'
+    substituteAllInPlace '${name}'
+    patchShebangs '${name}'
+
+    if [ "''${debug:-0}" -eq 1 ]; then
+      cat '${name}'
+    fi
+
+    shellcheck -x '${name}'
+    mv '${name}' $out
+  '';
 
   pkgsLinux = forceSystem "x86_64-linux" "x86_64";
   vmToolsLinux = vmTools.override { kernel = linuxkitKernel; pkgs = pkgsLinux; };
@@ -50,69 +65,21 @@ let
       }
     ];
   };
-  stage1Init = writeScript "vm-run-stage1" ''
-    #! ${vmToolsLinux.initrdUtils}/bin/ash -e
-
-    export PATH=${vmToolsLinux.initrdUtils}/bin
-
-    mkdir /etc
-    echo -n > /etc/fstab
-
-    mount -t proc none /proc
-    mount -t sysfs none /sys
-
-    echo 2 > /proc/sys/vm/panic_on_oom
-
-    echo "loading kernel modules..."
-    for i in $(cat ${vmToolsLinux.modulesClosure}/insmod-list); do
-      insmod $i
-    done
-
-    mount -t devtmpfs devtmpfs /dev
-
-    ifconfig lo up
-
-    mkdir /fs
-
-    if ! mount -t ext4 /dev/${hd} /fs 2>/dev/null; then
-      ${pkgsLinux.e2fsprogs}/bin/mkfs.ext4 -q /dev/${hd}
-      mount -t ext4 /dev/${hd} /fs
-    fi
-
-    mkdir -p /fs/dev
-    mount -o bind /dev /fs/dev
-
-    mkdir -p /fs/dev/shm /fs/dev/pts
-    mount -t tmpfs -o "mode=1777" none /fs/dev/shm
-    mount -t devpts none /fs/dev/pts
-
-    echo "extracting Nix store..."
-    EXTRACT_UNSAFE_SYMLINKS=1 tar -C /fs -xf ${systemTarball}/tarball/nixos-system-${system}.tar.xz nix nix-path-registration
-
-    mkdir -p /fs/tmp /fs/run /fs/var
-    mount -t tmpfs -o "mode=755" none /fs/run
-    ln -sfn /run /fs/var/run
-
-    mkdir -p /fs/proc
-    mount -t proc none /fs/proc
-
-    mkdir -p /fs/sys
-    mount -t sysfs none /fs/sys
-
-    mkdir -p /fs/etc
-    ln -sf /proc/mounts /fs/etc/mtab
-    echo "127.0.0.1 localhost" > /fs/etc/hosts
-
-    echo "starting stage 2 ($command)"
-    exec switch_root /fs $command
-  '';
+  stage1Init = shellcheckedScript "vm-run-stage1" ./stage-1.sh {
+    inherit (vmToolsLinux) initrdUtils;
+    inherit (vmToolsLinux) modulesClosure;
+    inherit (pkgsLinux) e2fsprogs;
+    inherit hd;
+    systemTarballPath = "${systemTarball}/tarball/nixos-system-${system}.tar.xz";
+  };
 
   sshdConfig = writeText "linuxkit-sshd-config" ''
     PermitRootLogin yes
     PasswordAuthentication no
     ChallengeResponseAuthentication no
   '';
-stage2Init = let
+
+  stage2Init = let
     script_modprobe = writeScript "modeprobe" ''
       #! /bin/sh
       export MODULE_DIR=${pkgsLinux.linux}/lib/modules/
