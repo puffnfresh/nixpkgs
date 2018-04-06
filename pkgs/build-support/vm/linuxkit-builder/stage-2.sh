@@ -1,4 +1,4 @@
-#! @bash@/bin/bash -eux
+#! @bash@/bin/bash -eu
 
 export PATH=@coreutils@/bin:@busybox@/bin
 export SH_PATH=@bash@/bin/sh

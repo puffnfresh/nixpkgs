@@ -1,4 +1,4 @@
-#! @initrdUtils@/bin/ash -e
+#! @initrdUtils@/bin/ash -eu
 # shellcheck shell=dash
 
 export PATH=@initrdUtils@/bin:@e2fsprogs@/bin;

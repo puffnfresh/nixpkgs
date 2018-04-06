@@ -18,7 +18,6 @@
 , linuxkit
 , buildEnv
 , writeScript
-, writeScriptBin
 , writeText
 , writeTextFile
 , runCommand
@@ -35,6 +34,9 @@
 let
   writeScriptDir = name: text: writeTextFile {inherit name text; executable = true; destination = "/${name}"; };
   writeRunitForegroundService = name: run: writeTextFile {inherit name; text = run; executable = true; destination = "/${name}/run"; };
+  shellcheckedScriptBin = name: src: substitutions: runCommand "shellchecked-${name}" {
+    sub_src = shellcheckedScript name src substitutions;
+  } "mkdir -p $out/bin; cp $sub_src $out/bin/${name}";
   shellcheckedScript = name: src: substitutions: runCommand "shellchecked-${name}" (substitutions // {
     buildInputs = [ shellcheck ];
   }) ''
@@ -227,107 +229,14 @@ let
       }
     ];
   };
-  startLinuxKitBuilder = ''
-    #!${bash}/bin/bash
-
-    usage() {
-      echo "Usage: $(basename $0) [-d directory] [-f features] [-s size] [-c cpus] [-m mem]" >&2
-    }
-
-    NAME="linuxkit-builder"
-
-    DIR="$HOME/.nixpkgs/$NAME"
-    FEATURES="big-parallel"
-    SIZE="10G"
-    CPUS=1
-    MEM=1024
-    while getopts "d:f:s:h" opt; do
-      case $opt in
-        d) DIR="$OPTARG" ;;
-        f) FEATURES="$OPTARG" ;;
-        s) SIZE="$OPTARG" ;;
-        c) CPUS="$OPTARG" ;;
-        m) MEM="$OPTARG" ;;
-        h | \?)
-          usage
-          exit 64
-          ;;
-      esac
-    done
-
-    mkdir -p $DIR
-    ln -fs ${linuxkitKernel}/${img} $DIR/nix-kernel
-    ln -fs ${initrd}/initrd $DIR/nix-initrd.img
-    echo -n "console=ttyS0 panic=1 command=${stage2Init} loglevel=7 debug" > $DIR/nix-cmdline
-
-    if [ ! -d $DIR/keys ]; then
-      mkdir -p $DIR/keys
-      (
-        cd $DIR/keys
-        ssh-keygen -C "Nix LinuxKit Builder, Client" -N "" -f client
-        ssh-keygen -C "Nix LinuxKit Builder, Server" -f ssh_host_ecdsa_key -N "" -t ecdsa
-
-        tar -cf server-config.tar client.pub ssh_host_ecdsa_key.pub ssh_host_ecdsa_key
-
-        echo -n '[localhost]:${hostPort} ' > known_host
-        cat ssh_host_ecdsa_key.pub >> known_host
-      )
-    fi
-
-    cp ${./integrated.sh} $DIR/integrated.sh
-    chmod +x $DIR/integrated.sh
-    cp ${./example.nix} $DIR/example.nix
-
-    cat <<EOF > $DIR/ssh-config
-    Host nix-linuxkit
-       HostName localhost
-       User root
-       Port ${hostPort}
-       IdentityFile $DIR/keys/client
-       StrictHostKeyChecking yes
-       UserKnownHostsFile $DIR/keys/known_host
-       IdentitiesOnly yes
-    EOF
+in shellcheckedScriptBin "linuxkit-builder" ./ui.sh {
+  inherit bash hostPort vpnkit hyperkit linuxkit containerIp;
+  kernel_path = "${linuxkitKernel}/${img}";
+  initrd_path = "${initrd}/initrd";
+  integrated_path = ./integrated.sh;
+  example_path = ./example.nix;
 
 
-    cat <<-EOF > $DIR/finish-setup.sh
-      #!/bin/sh
-      cat <<EOI
-      1. Add the following to /etc/nix/machines:
-
-        nix-linuxkit x86_64-linux $DIR/keys/client $CPUS 1 $FEATURES
-
-      2. Add the following to /var/root/.ssh/config:
-
-        Host nix-linuxkit
-           HostName localhost
-           User root
-           Port ${hostPort}
-           IdentityFile $DIR/keys/client
-           StrictHostKeyChecking yes
-           UserKnownHostsFile $DIR/keys/known_host
-           IdentitiesOnly yes
-
-      3. Try it out!
-
-        nix-build $DIR/example.nix
-
-
-    EOF
-
-    chmod +x $DIR/finish-setup.sh
-
-    PATH="${vpnkit}/bin:$PATH"
-    exec ${linuxkit}/bin/linuxkit run \
-      hyperkit \
-      -hyperkit ${hyperkit}/bin/hyperkit $@ \
-      -networking vpnkit \
-      -ip ${containerIp} \
-      -disk $DIR/nix-disk,size=$SIZE \
-      -data-file $DIR/keys/server-config.tar \
-      -cpus $CPUS \
-      -mem $MEM \
-      $DIR/nix
-  '';
-in
-writeScriptBin "linuxkit-builder" startLinuxKitBuilder
+  kernel_cmdline_path = writeText "nix-cmdline"
+    "console=ttyS0 panic=1 command=${stage2Init} loglevel=7 debug";
+}
