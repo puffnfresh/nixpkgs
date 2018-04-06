@@ -1,8 +1,6 @@
 #!@bash@/bin/bash -eu
 
-KERNEL_PATH=@kernel_path@
-INITRD_PATH=@initrd_path@
-KERNEL_CMDLINE_PATH=@kernel_cmdline_path@
+BOOT_FILES=@boot_files@
 HOST_PORT=@hostPort
 INTEGRATED_PATH=@integrated_path@
 EXAMPLE_PATH=@example_path@
@@ -37,9 +35,6 @@ while getopts "d:f:s:c:m:h" opt; do
 done
 
 mkdir -p "$DIR"
-ln -fs $KERNEL_PATH "$DIR/nix-kernel"
-ln -fs $INITRD_PATH "$DIR/nix-initrd.img"
-ln -fs $KERNEL_CMDLINE_PATH "$DIR/nix-cmdline"
 
 if [ ! -d "$DIR/keys" ]; then
   mkdir -p "$DIR/keys"
@@ -108,4 +103,5 @@ exec "$LINUXKIT_ROOT/bin/linuxkit" run \
   -data-file "$DIR/keys/server-config.tar" \
   -cpus "$CPUS" \
   -mem "$MEM" \
-  "$DIR/nix"
+  -state "$DIR/nix-state" \
+  "$BOOT_FILES/nix"

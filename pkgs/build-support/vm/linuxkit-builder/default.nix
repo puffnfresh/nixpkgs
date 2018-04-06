@@ -231,12 +231,20 @@ let
   };
 in shellcheckedScriptBin "linuxkit-builder" ./ui.sh {
   inherit bash hostPort vpnkit hyperkit linuxkit containerIp;
-  kernel_path = "${linuxkitKernel}/${img}";
-  initrd_path = "${initrd}/initrd";
+
+  boot_files = runCommand "linuxkit-kernel-files" {
+    kernel_path = "${linuxkitKernel}/${img}";
+    initrd_path = "${initrd}/initrd";
+    kernel_cmdline_path = writeText "nix-cmdline"
+      "console=ttyS0 panic=1 command=${stage2Init} loglevel=7 debug";
+  } ''
+    mkdir $out
+    cd $out
+
+    ln -fs $kernel_path "./nix-kernel"
+    ln -fs $initrd_path "./nix-initrd.img"
+    ln -fs $kernel_cmdline_path "./nix-cmdline"
+  '';
   integrated_path = ./integrated.sh;
   example_path = ./example.nix;
-
-
-  kernel_cmdline_path = writeText "nix-cmdline"
-    "console=ttyS0 panic=1 command=${stage2Init} loglevel=7 debug";
 }
