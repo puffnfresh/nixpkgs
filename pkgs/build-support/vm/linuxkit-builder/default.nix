@@ -42,11 +42,18 @@ let
     substituteAllInPlace '${name}'
     patchShebangs '${name}'
 
+    if grep -qE '@[^[:space:]]+@' '${name}'; then
+      echo "WARNING: Found @alpha@ placeholders!"
+       grep -E '@[^[:space:]]+@' '${name}'
+       exit 1
+    fi
+
     if [ "''${debug:-0}" -eq 1 ]; then
       cat '${name}'
     fi
 
     shellcheck -x '${name}'
+    chmod +x '${name}'
     mv '${name}' $out
   '';
 
@@ -69,7 +76,7 @@ let
     inherit (vmToolsLinux) initrdUtils;
     inherit (vmToolsLinux) modulesClosure;
     inherit (pkgsLinux) e2fsprogs;
-    inherit hd;
+    inherit hd stage2Init;
     systemTarballPath = "${systemTarball}/tarball/nixos-system-${system}.tar.xz";
   };
 
@@ -79,7 +86,10 @@ let
     ChallengeResponseAuthentication no
   '';
 
-  stage2Init = let
+  stage2Init = shellcheckedScript "vm-run-stage2" ./stage-2.sh rec {
+    inherit (pkgsLinux) coreutils busybox bash runit;
+    inherit storeDir containerIp;
+
     script_modprobe = writeScript "modeprobe" ''
       #! /bin/sh
       export MODULE_DIR=${pkgsLinux.linux}/lib/modules/
@@ -97,12 +107,12 @@ let
       root:x:0:root
     '';
 
-    file_bashrc = writeText "bashrc" ''
+    file_bashrc = writeScript "bashrc" ''
       export PATH="${vmToolsLinux.initrdUtils}/bin:${pkgsLinux.nix}/bin"
       export NIX_SSL_CERT_FILE='${pkgsLinux.cacert}/etc/ssl/certs/ca-bundle.crt'
     '';
 
-    script_poweroff = writeText "poweroff" ''
+    script_poweroff = writeScript "poweroff" ''
       #!/bin/sh
       exec ${pkgsLinux.busybox}/bin/poweroff -f
     '';
@@ -207,90 +217,7 @@ let
         '')
       ];
     };
-  in writeScript "vm-run-stage2" ''
-    #! ${pkgsLinux.bash}/bin/bash -eux
-
-    export NIX_STORE=${storeDir}
-    export NIX_BUILD_TOP=/tmp
-    export TMPDIR=/tmp
-    cd "$NIX_BUILD_TOP"
-
-    ${pkgsLinux.coreutils}/bin/mkdir -p /bin
-    ${pkgsLinux.coreutils}/bin/ln -fs ${pkgsLinux.bash}/bin/sh /bin/sh
-    ln -s /proc/self/fd /dev/fd
-
-    # # Set up automatic kernel module loading.
-    ${pkgsLinux.coreutils}/bin/cat ${script_modprobe} > /run/modprobe
-    ${pkgsLinux.coreutils}/bin/chmod 755 /run/modprobe
-    echo /run/modprobe > /proc/sys/kernel/modprobe
-    # This never passed, before:
-    # + /nix/store/q1yvjh3ab1sb5sn510zla8nlr2r1iimp-kmod-24/bin/modprobe virtio_net
-    # modprobe: FATAL: Module virtio_net not found in directory /nix/store/yimxiswgxpps9j19kykddfibj02b4k05-linux-4.9.50/lib/modules//4.9.50-linuxkit
-    # /run/modprobe virtio_net
-
-    cat ${file_passwd} > /etc/passwd
-    cat ${file_group} > /etc/group
-
-    mkdir -p /etc/ssh /root /var/db /var/empty
-    chown root:root /root
-    chmod 0700 /root
-
-    cat ${file_bashrc} > /root/.bashrc
-    . /root/.bashrc
-
-    ls -la /nix/var/nix/ || true
-    ls -la /nix/var/nix/db || true
-
-    if [ -f /nix-path-registration ]; then
-      cat /nix-path-registration | nix-store --load-db
-      rm /nix-path-registration
-    fi
-
-    ifconfig eth0 ${containerIp}
-    route add default gw 192.168.65.1 eth0
-    echo 'nameserver 192.168.65.1' > /etc/resolv.conf
-
-    mkdir -p /mnt
-    ${pkgsLinux.busybox}/bin/mount /dev/sr0 /mnt
-
-    if [ ! -f /mnt/config ]; then
-      echo "FAIL FAIL FAIL"
-      echo "You must pass an SSH key data file via via a CDROM (ie: -data on linuxkit)"
-      exit 1
-    fi
-
-    mkdir /extract-ssh-keys
-    (
-      rm -rf /root/.ssh
-      mkdir -p /root/.ssh
-      chmod 0700 /root/.ssh
-
-      cd /extract-ssh-keys
-      tar -xf /mnt/config
-      chmod 0600 ./*
-      chmod 0644 ./*.pub
-
-      mv client.pub /root/.ssh/authorized_keys
-      chmod 0600 /root/.ssh/authorized_keys
-      chown root:root /root/.ssh/authorized_keys
-      mv ssh_host_* /etc/ssh/
-    )
-    rm -rf /extract-ssh-keys
-
-    mkdir -p /port
-    mount -v -t 9p -o trans=virtio,dfltuid=1001,dfltgid=50,version=9p2000 port /port
-
-    mkdir -p /etc/acpi/PWRF /etc/acpi/events
-    cat ${script_poweroff} > /etc/acpi/PWRF/00000080
-    chmod +x /etc/acpi/PWRF/00000080
-
-    mkdir -p /dev/input /var/log
-
-    rm -rf /etc/runit
-    cp -r ${runit_targets} /etc/runit/
-
-    exec ${pkgsLinux.runit}/bin/runit
-  '';
+  };
 
   img = "bzImage";
   initrd = makeInitrd {

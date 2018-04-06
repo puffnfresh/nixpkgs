@@ -4,7 +4,7 @@
 export PATH=@initrdUtils@/bin:@e2fsprogs@/bin;
 HD=/dev/@hd@
 SYSTEM_TARBALL_PATH=@systemTarballPath@
-STAGE_TWO=@stage2@
+STAGE_TWO=@stage2Init@
 MODULE_LIST=@modulesClosure@/insmod-list
 
 mkdir /etc
