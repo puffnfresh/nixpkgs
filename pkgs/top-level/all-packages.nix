@@ -7324,6 +7324,10 @@ in
 
   wrk2 = callPackage ../tools/networking/wrk2 { };
 
+  wsl-systemd-wrapper = callPackage ../os-specific/windows/wsl-systemd-wrapper {
+    inherit (xorg) lndir;
+  };
+
   wuzz = callPackage ../tools/networking/wuzz { };
 
   wv = callPackage ../tools/misc/wv { };
