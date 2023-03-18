@@ -31995,6 +31995,8 @@ with pkgs;
   neomutt = callPackage ../applications/networking/mailreaders/neomutt { };
 
   natron = qt5.callPackage ../applications/video/natron { };
+  natron-plugins = recurseIntoAttrs (callPackage ../applications/video/natron/plugins {});
+  natron-with-plugins = plugins: callPackage ../applications/video/natron/wrapper.nix { inherit plugins; };
 
   natural-docs = callPackage ../applications/misc/natural-docs { };
 
