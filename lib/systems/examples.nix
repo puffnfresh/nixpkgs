@@ -325,6 +325,11 @@ rec {
     libc = "ucrt"; # This distinguishes the mingw (non posix) toolchain
   };
 
+  cygwin = {
+    config = "x86_64-pc-cygwin";
+    libc = "cygwin"; # cygwin (posix) toolchain
+  };
+
   # BSDs
 
   x86_64-freebsd = {

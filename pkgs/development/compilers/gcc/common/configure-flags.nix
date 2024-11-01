@@ -237,6 +237,10 @@ let
       #   cc1: error: fp software completion requires '-mtrap-precision=i' [-Werror]
       "--disable-werror"
     ]
+    ++ lib.optionals targetPlatform.isCygwin [
+      # doesn't cross-compile under Cygwin
+      "--disable-libvtv"
+    ]
   ;
 
 in configureFlags

@@ -8,7 +8,10 @@ lib.makeScope newScope (self: with self; {
 
   dlfcn = callPackage ./dlfcn { };
 
-  w32api = callPackage ./w32api { };
+  cygwin = callPackage ./cygwin {
+    stdenv = stdenvNoLibc;
+  };
+  cygwin_headers = callPackage ./cygwin/headers.nix { };
 
   mingwrt = callPackage ./mingwrt { };
   mingw_runtime = mingwrt;
