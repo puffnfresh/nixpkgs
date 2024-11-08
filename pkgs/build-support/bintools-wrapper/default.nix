@@ -39,8 +39,14 @@
 , defaultHardeningFlags ? [
     "bindnow"
     "format"
+  ] ++ lib.optionals (!stdenvNoCC.targetPlatform.isCygwin) [
+    # Size of things don't line up under fortify flag with newlib-cygwin:
+    # > two or more data types in declaration specifiers
+    # > conflicting types for 'read'
+    # Might be able to be fixed by comparing with normal (non-Nix) Cygwin.
     "fortify"
     "fortify3"
+  ] ++ [
     "pic"
     "relro"
     "stackprotector"
