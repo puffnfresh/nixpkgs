@@ -42,6 +42,7 @@ let
     isLinux
     isPower64
     isWindows
+    isCygwin
     ;
 
   inherit (lib.types)
@@ -304,6 +305,7 @@ rec {
   kernelFamilies = setTypes types.openKernelFamily {
     bsd = {};
     darwin = {};
+    windows = {};
   };
 
   ################################################################################
@@ -320,7 +322,7 @@ rec {
 
   kernels = let
     inherit (execFormats) elf pe wasm unknown macho;
-    inherit (kernelFamilies) bsd darwin;
+    inherit (kernelFamilies) bsd darwin windows;
   in setTypes types.openKernel {
     # TODO(@Ericson2314): Don't want to mass-rebuild yet to keeping 'darwin' as
     # the normalized name for macOS.
@@ -334,7 +336,8 @@ rec {
     solaris  = { execFormat = elf;     families = { }; };
     wasi     = { execFormat = wasm;    families = { }; };
     redox    = { execFormat = elf;     families = { }; };
-    windows  = { execFormat = pe;      families = { }; };
+    windows  = { execFormat = pe;      families = { inherit windows; }; };
+    cygwin   = { execFormat = pe;      families = { inherit windows; }; };
     ghcjs    = { execFormat = unknown; families = { }; };
     genode   = { execFormat = elf;     families = { }; };
     mmixware = { execFormat = unknown; families = { }; };
@@ -443,13 +446,11 @@ rec {
       then { cpu = elemAt l 0; kernel = "none"; abi = "unknown"; }
       else throw "Target specification with 1 components is ambiguous";
     "2" = # We only do 2-part hacks for things Nix already supports
-      if elemAt l 1 == "cygwin"
-        then mkSkeletonFromList [ (elemAt l 0) "pc" "cygwin" ]
       # MSVC ought to be the default ABI so this case isn't needed. But then it
       # becomes difficult to handle the gnu* variants for Aarch32 correctly for
       # minGW. So it's easier to make gnu* the default for the MinGW, but
       # hack-in MSVC for the non-MinGW case right here.
-      else if elemAt l 1 == "windows"
+      if elemAt l 1 == "windows"
         then { cpu = elemAt l 0;                      kernel = "windows";  abi = "msvc";     }
       else if (elemAt l 1) == "elf"
         then { cpu = elemAt l 0; vendor = "unknown";  kernel = "none";     abi = elemAt l 1; }
@@ -466,7 +467,7 @@ rec {
       }
       # cpu-vendor-os
       else if elemAt l 1 == "apple" ||
-              elem (elemAt l 2) [ "redox" "mmixware" "ghcjs" "mingw32" ] ||
+              elem (elemAt l 2) [ "redox" "mmixware" "ghcjs" "mingw32" "cygwin" ] ||
               hasPrefix "freebsd" (elemAt l 2) ||
               hasPrefix "netbsd" (elemAt l 2) ||
               hasPrefix "openbsd" (elemAt l 2) ||
@@ -478,13 +479,6 @@ rec {
         kernel = if elemAt l 2 == "mingw32"
                  then "windows"  # autotools breaks on -gnu for window
                  else elemAt l 2;
-      }
-      # lots of tools expect a triplet for Cygwin, even though the vendor is just "pc"
-      else if elemAt l 2 == "cygwin"
-      then {
-        cpu = elemAt l 0;
-        kernel = "windows";
-        abi = "cygnus";
       }
       else throw "Target specification with 3 components is ambiguous";
     "4" =    { cpu = elemAt l 0; vendor = elemAt l 1; kernel = elemAt l 2; abi = elemAt l 3; };
@@ -517,6 +511,8 @@ rec {
                else                                   getKernel (removeAbiSuffix args.kernel);
       abi =
         /**/ if args ? abi       then getAbi args.abi
+        else if isCygwin parsed then
+          abis.cygnus
         else if isLinux parsed || isWindows parsed then
           if isAarch32 parsed then
             if versionAtLeast (parsed.cpu.version or "0") "6"
@@ -536,8 +532,7 @@ rec {
     kernel.name + toString (kernel.version or "");
 
   doubleFromSystem = { cpu, kernel, abi, ... }:
-    /**/ if abi == abis.cygnus       then "${cpu.name}-cygwin"
-    else if kernel.families ? darwin then "${cpu.name}-darwin"
+    /**/ if kernel.families ? darwin then "${cpu.name}-darwin"
     else "${cpu.name}-${kernelName kernel}";
 
   tripleFromSystem = { cpu, vendor, kernel, abi, ... } @ sys: assert isSystem sys; let

@@ -100,9 +100,9 @@ rec {
     isFreeBSD      = { kernel = { name = "freebsd"; }; };
     isNetBSD       = { kernel = kernels.netbsd; };
     isOpenBSD      = { kernel = kernels.openbsd; };
-    isWindows      = { kernel = kernels.windows; };
-    isCygwin       = { kernel = kernels.windows; abi = abis.cygnus; };
-    isMinGW        = { kernel = kernels.windows; abi = abis.gnu; };
+    isWindows      = { kernel = { families = { inherit (kernelFamilies) windows; }; }; };
+    isCygwin       = { kernel = kernels.cygwin; };
+    isMinGW        = { kernel = { families = { inherit (kernelFamilies) windows; }; }; abi = abis.gnu; };
     isWasi         = { kernel = kernels.wasi; };
     isRedox        = { kernel = kernels.redox; };
     isGhcjs        = { kernel = kernels.ghcjs; };
