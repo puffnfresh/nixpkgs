@@ -12,16 +12,16 @@
 
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "brush";
-  version = "0.3.0";
+  version = "0.3.0-unstable-2026-02-18";
 
   src = fetchFromGitHub {
     owner = "reubeno";
     repo = "brush";
-    tag = "brush-shell-v${finalAttrs.version}";
-    hash = "sha256-Ib7IRjehcftCETUAT1+otXRdTFFOOwMN4mjnArYLP7Y=";
+    rev = "b17ba985229af8d37b839388f50d0bc54cd49e44";
+    hash = "sha256-1wsS/XiPX2NlyYWK13134PVOnis1tdZxUFGdM2bRpwM=";
   };
 
-  cargoHash = "sha256-mD6zrYX5xlEfV56syb0jqxE3jUO28asugOHKz27hTC4=";
+  cargoHash = "sha256-3dVkUQoYG+U//ta3U08HM1SrnKllge6YGNzQNIIhZ/k=";
 
   nativeInstallCheckInputs = [
     versionCheckHook
@@ -60,7 +60,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   meta = {
     description = "Bash/POSIX-compatible shell implemented in Rust";
     homepage = "https://github.com/reubeno/brush";
-    changelog = "https://github.com/reubeno/brush/blob/${finalAttrs.src.tag}/CHANGELOG.md";
+    changelog = "https://github.com/reubeno/brush/blob/${finalAttrs.src.rev}/CHANGELOG.md";
     license = lib.licenses.mit;
     maintainers = with lib.maintainers; [ kachick ];
     mainProgram = "brush";
