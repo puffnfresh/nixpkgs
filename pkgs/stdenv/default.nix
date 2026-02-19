@@ -39,6 +39,8 @@ let
 
   stagesCustom = import ./custom args;
 
+  stagesWindows = import ./windows args;
+
 in
 # Select the appropriate stages for the platform `system'.
 if crossSystem != localSystem || crossOverlays != [ ] then
@@ -50,6 +52,8 @@ else if localSystem.isLinux then
   stagesLinux
 else if localSystem.isDarwin then
   stagesDarwin
+else if localSystem.isWindows then
+  stagesWindows
 # misc special cases
 else
   {
