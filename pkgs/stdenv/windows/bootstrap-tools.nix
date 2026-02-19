@@ -1,50 +1,48 @@
 # Minimal Windows stdenv bootstrap tarball
 #
-# Contains cross-compiled Rust reimplementations of standard Unix tools
-# for a minimal build environment on Windows:
-#   - Brush (bash-compatible shell)
-#   - uutils-coreutils
-#   - uutils-findutils (find, xargs)
-#   - uutils-diffutils (diff, cmp)
-#   - uutils-sed
-#   - uutils-tar
+# Contains Cygwin cross-compiled GNU tools for a POSIX-compatible
+# build environment on Windows:
+#   - GNU Bash (shell)
+#   - GNU Coreutils, Findutils, Diffutils
+#   - GNU Sed, Grep, Awk
+#   - GNU Tar, Make, Patch
+#   - gzip, bzip2, xz (archive tools)
+#   - cygwin1.dll (POSIX compatibility layer)
 #
 let
   nativePkgs = import ../../.. { };
 
   crossPkgs = import ../../.. {
-    crossSystem.config = "x86_64-w64-mingw32";
+    crossSystem.config = "x86_64-pc-cygwin";
   };
 
   inherit (nativePkgs) lib;
 
-  brush = crossPkgs.brush;
-
-  uutils-coreutils = crossPkgs.uutils-coreutils.override {
-    prefix = null;
-  };
-
-  uutils-findutils = crossPkgs.uutils-findutils;
-  uutils-diffutils = crossPkgs.uutils-diffutils;
-  uutils-sed = crossPkgs.uutils-sed;
-  uutils-tar = crossPkgs.uutils-tar;
-
-  # The subcommands to create hardlinks for
-  coreutilsPrograms = [
-    "arch" "b2sum" "base32" "base64" "basename" "basenc"
-    "cat" "cksum" "comm" "cp" "csplit" "cut"
-    "date" "dd" "df" "dir" "dircolors" "dirname"
-    "du" "echo" "env" "expand" "expr" "factor" "false" "fmt"
-    "fold" "head" "hostname" "join" "link" "ln" "ls"
-    "md5sum" "mkdir" "mktemp" "more" "mv" "nl" "nproc" "numfmt"
-    "od" "paste" "pr" "printenv" "printf" "ptx" "pwd"
-    "readlink" "realpath" "rm" "rmdir"
-    "seq" "sha1sum" "sha224sum" "sha256sum" "sha384sum" "sha512sum"
-    "shred" "shuf" "sleep" "sort" "split" "sum" "sync"
-    "tac" "tail" "tee" "test" "touch" "tr" "true"
-    "truncate" "tsort" "uname" "unexpand" "uniq" "unlink"
-    "vdir" "wc" "whoami" "yes"
+  # Packages whose executables go into the bootstrap tarball.
+  packages = with crossPkgs; [
+    bash
+    coreutils
+    findutils
+    diffutils
+    gnused
+    gnugrep
+    gawk
+    gnutar
+    gnumake
+    patch
+    gzip
+    bzip2.bin
+    xz.bin
   ];
+
+  # Use closureInfo to find every store path in the runtime closure,
+  # so we can collect all required DLLs (cygwin1.dll, cygiconv, etc.).
+  closureInfo = nativePkgs.closureInfo {
+    rootPaths = packages ++ [
+      crossPkgs.cygwin.newlib-cygwin
+      crossPkgs.cygwin.newlib-cygwin.bin
+    ];
+  };
 
 in
 nativePkgs.stdenvNoCC.mkDerivation {
@@ -59,36 +57,45 @@ nativePkgs.stdenvNoCC.mkDerivation {
 
     mkdir -p $out/pack/bin
 
-    cp -v ${brush}/bin/brush.exe $out/pack/bin/brush.exe
-    # Provide bash.exe and sh.exe aliases
-    cp -v ${brush}/bin/brush.exe $out/pack/bin/bash.exe
-    cp -v ${brush}/bin/brush.exe $out/pack/bin/sh.exe
+    # Copy executables from each package
+    for pkg in ${lib.concatMapStringsSep " " toString packages}; do
+      if [ -d "$pkg/bin" ]; then
+        for f in "$pkg/bin"/*.exe; do
+          if [ -e "$f" ]; then
+            cp -nv "$f" $out/pack/bin/ || true
+          fi
+        done
+        # Some packages (e.g. gzip) wrap the real .exe behind a shell
+        # script and hide it as .foo.exe.  Copy those as foo.exe.
+        for f in "$pkg/bin"/.*.exe; do
+          if [ -e "$f" ]; then
+            name="$(basename "$f")"       # .gzip.exe
+            name="''${name#.}"            # gzip.exe
+            cp -nv "$f" "$out/pack/bin/$name" || true
+          fi
+        done
+      fi
+    done
 
-    cp -v ${uutils-coreutils}/bin/coreutils $out/pack/bin/coreutils.exe
-    ${lib.concatMapStringsSep "\n" (prog:
-      "ln $out/pack/bin/coreutils.exe $out/pack/bin/${prog}.exe"
-    ) coreutilsPrograms}
+    # Provide sh.exe alias for bash
+    if [ ! -e $out/pack/bin/sh.exe ]; then
+      ln $out/pack/bin/bash.exe $out/pack/bin/sh.exe
+    fi
 
-    cp -v ${uutils-findutils}/bin/find.exe $out/pack/bin/find.exe
-    cp -v ${uutils-findutils}/bin/xargs.exe $out/pack/bin/xargs.exe
-
-    cp -v ${uutils-diffutils}/bin/diffutils.exe $out/pack/bin/diffutils.exe
-    ln $out/pack/bin/diffutils.exe $out/pack/bin/diff.exe
-    ln $out/pack/bin/diffutils.exe $out/pack/bin/cmp.exe
-
-    cp -v ${uutils-sed}/bin/sed.exe $out/pack/bin/sed.exe
-
-    cp -v ${uutils-tar}/bin/tarapp.exe $out/pack/bin/tar.exe
-
-    for dir in ${brush}/bin ${uutils-coreutils}/bin ${uutils-findutils}/bin ${uutils-diffutils}/bin ${uutils-sed}/bin ${uutils-tar}/bin; do
-      for dll in "$dir"/*.dll; do
-        if [ -e "$dll" ]; then
-          cp -nv "$dll" $out/pack/bin/ || true
+    # Collect all DLLs from the full runtime closure
+    for path in $(cat ${closureInfo}/store-paths); do
+      for dir in "$path/bin" "$path/lib"; do
+        if [ -d "$dir" ]; then
+          for f in "$dir"/*.dll; do
+            if [ -e "$f" ]; then
+              cp -nv "$f" $out/pack/bin/ || true
+            fi
+          done
         fi
       done
     done
 
-    # Add a file so builtins.fetchTarball doesn't strip bin/
+    # Add marker file so builtins.fetchTarball doesn't strip bin/
     echo "windows-bootstrap-tools" > $out/pack/.id
 
     mkdir -p $out/on-server
@@ -104,7 +111,7 @@ nativePkgs.stdenvNoCC.mkDerivation {
   '';
 
   meta = {
-    description = "Minimal Windows stdenv bootstrap tarball (brush + uutils)";
+    description = "Minimal Windows stdenv bootstrap tarball (Cygwin GNU tools)";
     platforms = lib.platforms.linux;
   };
 }

@@ -1,6 +1,8 @@
 export PATH=
 for i in $initialPath; do
     if [ "$i" = / ]; then i=; fi
+    # Translate Windows drive paths (C:/...) to Cygwin format (/cygdrive/c/...)
+    case "$i" in [A-Za-z]:/*) i="/cygdrive/${i%%:*}${i#?:}" ;; esac
     PATH=$PATH${PATH:+:}$i/bin
 done
 

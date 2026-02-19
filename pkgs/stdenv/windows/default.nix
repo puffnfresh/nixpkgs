@@ -1,13 +1,11 @@
 # Minimal Windows stdenv
 #
-# Uses cross-compiled Rust reimplementations of standard Unix tools from
-# a bootstrap tarball as the initial build environment:
-#   - Brush (bash-compatible shell)
-#   - uutils-coreutils
-#   - uutils-findutils (find, xargs)
-#   - uutils-diffutils (diff, cmp)
-#   - uutils-sed
-#   - uutils-tar
+# Uses Cygwin cross-compiled GNU tools from a bootstrap tarball as
+# the initial build environment:
+#   - GNU Bash, Coreutils, Findutils, Diffutils
+#   - GNU Sed, Grep, Awk, Tar, Make, Patch
+#   - gzip, bzip2, xz
+#   - cygwin1.dll (POSIX compatibility layer)
 #
 # This is an in-progress stdenv with no C compiler.
 {
@@ -52,7 +50,7 @@ in
     gnugrep = null;
   })
 
-  # Stage 1: minimal stdenv with brush and no C compiler.
+  # Stage 1: minimal stdenv with Cygwin GNU tools and no C compiler.
   (prevStage:
   {
     inherit config overlays;
