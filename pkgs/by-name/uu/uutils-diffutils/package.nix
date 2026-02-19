@@ -1,5 +1,6 @@
 {
   lib,
+  stdenv,
   fetchFromGitHub,
   rustPlatform,
   nix-update-script,
@@ -25,16 +26,20 @@ rustPlatform.buildRustPackage (finalAttrs: {
     "--skip=ed_diff::tests::test_permutations_empty_lines"
   ];
 
-  postInstall = ''
-    ln -s $out/bin/diffutils $out/bin/cmp
-    ln -s $out/bin/diffutils $out/bin/diff
+  postInstall = let
+    ext = stdenv.hostPlatform.extensions.executable;
+  in ''
+    ln -s $out/bin/diffutils${ext} $out/bin/cmp${ext}
+    ln -s $out/bin/diffutils${ext} $out/bin/diff${ext}
   '';
 
   doInstallCheck = true;
-  installCheckPhase = ''
+  installCheckPhase = let
+    ext = stdenv.hostPlatform.extensions.executable;
+  in ''
     runHook preInstallCheck
 
-    $out/bin/diffutils 2>/dev/null | head -1 | grep -F 'diffutils ${finalAttrs.version}'
+    $out/bin/diffutils${ext} 2>/dev/null | head -1 | grep -F 'diffutils ${finalAttrs.version}'
 
     runHook postInstallCheck
   '';
@@ -48,6 +53,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     license = lib.licenses.mit;
     mainProgram = "diffutils";
     maintainers = with lib.maintainers; [ defelo ];
-    platforms = lib.platforms.unix;
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
   };
 })

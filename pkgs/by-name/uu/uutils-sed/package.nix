@@ -24,6 +24,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     license = lib.licenses.mit;
     mainProgram = "sed";
     maintainers = with lib.maintainers; [ kyehn ];
-    platforms = lib.platforms.unix;
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
   };
 })

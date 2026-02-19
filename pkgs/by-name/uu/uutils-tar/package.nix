@@ -28,6 +28,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     license = lib.licenses.mit;
     mainProgram = "tarapp";
     maintainers = with lib.maintainers; [ kyehn ];
-    platforms = lib.platforms.unix;
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
   };
 })

@@ -1,9 +1,9 @@
 {
   lib,
   stdenv,
+  buildPackages,
   fetchFromGitHub,
   rustPlatform,
-  cargo,
   python3Packages,
   versionCheckHook,
   nix-update-script,
@@ -15,6 +15,7 @@
   libselinux,
 
   acl,
+  windows,
 }:
 
 assert selinuxSupport -> lib.meta.availableOn stdenv.hostPlatform libselinux;
@@ -33,6 +34,13 @@ stdenv.mkDerivation (finalAttrs: {
   # error: linker `aarch64-linux-gnu-gcc` not found
   postPatch = ''
     rm .cargo/config.toml
+  '' + lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    # uudoc cannot be cross-compiled; remove it from install dependencies
+    sed -i 's/install: build install-manpages install-completions install-locales/install: build/' GNUmakefile
+  '' + lib.optionalString stdenv.hostPlatform.isWindows ''
+    # The Makefile doesn't account for the .exe suffix on Windows
+    sed -i 's|$(BUILDDIR)/coreutils $(INSTALLDIR_BIN)|$(BUILDDIR)/coreutils.exe $(INSTALLDIR_BIN)|' GNUmakefile
+    sed -i 's|$(BUILDDIR)/$(prog) $(INSTALLDIR_BIN)|$(BUILDDIR)/$(prog).exe $(INSTALLDIR_BIN)|' GNUmakefile
   '';
 
   cargoDeps = rustPlatform.fetchCargoVendor {
@@ -46,6 +54,9 @@ stdenv.mkDerivation (finalAttrs: {
     ]
     ++ lib.optionals selinuxSupport [
       libselinux
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isWindows [
+      windows.pthreads
     ];
 
   nativeBuildInputs = [
@@ -55,19 +66,19 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   makeFlags = [
-    "CARGO=${lib.getExe cargo}"
+    "CARGO=${lib.getExe buildPackages.cargo}"
     "PREFIX=${placeholder "out"}"
     "PROFILE=release"
     "SELINUX_ENABLED=${if selinuxSupport then "1" else "0"}"
     "INSTALLDIR_MAN=${placeholder "out"}/share/man/man1"
-    # Explicitly enable acl, and if requested selinux.
+    # Explicitly enable acl (except on Windows), and if requested selinux.
     # We cannot rely on SELINUX_ENABLED here since our explicit assignment
     # overrides its effect in the makefile.
     "BUILD_SPEC_FEATURE=${
       lib.concatStringsSep "," (
         # We can always enable acl, on non-Linux, libc provides the headers,
         # only in Linux we need to add the acl lib to buildInputs.
-        [
+        lib.optionals (!stdenv.hostPlatform.isWindows) [
           "feat_acl"
         ]
         ++ (lib.optionals selinuxSupport [
@@ -77,9 +88,19 @@ stdenv.mkDerivation (finalAttrs: {
     }"
   ]
   ++ lib.optionals (prefix != null) [ "PROG_PREFIX=${prefix}" ]
-  ++ lib.optionals buildMulticallBinary [ "MULTICALL=y" ];
+  ++ lib.optionals buildMulticallBinary [ "MULTICALL=y" ]
+;
 
-  env = lib.optionalAttrs selinuxSupport {
+  # Skip utils that are unavailable on Windows:
+  # these use Unix-only APIs (LD_PRELOAD, Unix signals, file modes, utmp, etc.)
+  preBuild = lib.optionalString stdenv.hostPlatform.isWindows ''
+    makeFlagsArray+=("SKIP_UTILS=chgrp chmod chown chroot groups hostid id install kill logname mkfifo mknod nice nohup pathchk pinky stat stdbuf stty timeout tty uptime users who")
+  '';
+
+
+  env = lib.optionalAttrs (stdenv.hostPlatform != stdenv.buildPlatform) {
+    CARGO_BUILD_TARGET = stdenv.hostPlatform.rust.rustcTarget;
+  } // lib.optionalAttrs selinuxSupport {
     SELINUX_INCLUDE_DIR = "${libselinux.dev}/include";
     SELINUX_LIB_DIR = lib.makeLibraryPath [
       libselinux
@@ -98,7 +119,7 @@ stdenv.mkDerivation (finalAttrs: {
       prefix' = lib.optionalString (prefix != null) prefix;
     in
     "${placeholder "out"}/bin/${prefix'}ls";
-  doInstallCheck = true;
+  doInstallCheck = stdenv.hostPlatform == stdenv.buildPlatform;
 
   passthru = {
     updateScript = nix-update-script { };
@@ -117,6 +138,6 @@ stdenv.mkDerivation (finalAttrs: {
       matthiasbeyer
     ];
     license = lib.licenses.mit;
-    platforms = lib.platforms.unix;
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
   };
 })

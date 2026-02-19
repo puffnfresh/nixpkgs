@@ -1,5 +1,6 @@
 {
   lib,
+  stdenv,
   fetchFromGitHub,
   fetchpatch2,
   rustPlatform,
@@ -27,8 +28,10 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   cargoHash = "sha256-TQRt1eecT500JaJB2P10T1yV+z2/T8cgTNtF9r5zQpg=";
 
-  postInstall = ''
-    rm $out/bin/testing-commandline
+  postInstall = let
+    ext = stdenv.hostPlatform.extensions.executable;
+  in ''
+    rm $out/bin/testing-commandline${ext}
   '';
 
   checkFlags = [
@@ -51,6 +54,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     license = lib.licenses.mit;
     mainProgram = "find";
     maintainers = with lib.maintainers; [ defelo ];
-    platforms = lib.platforms.unix;
+    platforms = lib.platforms.unix ++ lib.platforms.windows;
   };
 })
