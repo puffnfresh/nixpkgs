@@ -287,6 +287,12 @@ rec {
         family = "m68k";
       };
 
+      m32r = {
+        bits = 32;
+        significantByte = bigEndian;
+        family = "m32r";
+      };
+
       sh4 = {
         bits = 32;
         significantByte = littleEndian;

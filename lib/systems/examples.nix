@@ -221,6 +221,11 @@ rec {
     config = "or1k-elf";
   };
 
+  "m32r-elf" = {
+    config = "m32r-elf";
+    libc = null;
+  };
+
   m68k = {
     config = "m68k-unknown-linux-gnu";
   };
